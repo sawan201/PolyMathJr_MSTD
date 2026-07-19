@@ -2,6 +2,7 @@ from itertools import combinations
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 from math import comb
+from collections import Counter
 
 '''
 To run: 
@@ -12,7 +13,14 @@ To run:
 on how to do so on your local Machine and OS. 
 '''
 
+'''
+For q >> h this code will be computationally costly, but in my second commit I have tried to lower memory cost by negating usage of subset(q,k) thereby not having to store subset(q,k) twice.
+Instead it will be computed, frequency counted, and then discarded.
+'''
+
 #Create the set of all k-element subsets of [q]
+
+#in the new commit this function is now obsolete, but still left here in case anyone wants to use it
 def subset(q, k):
     if q is None or k is None:
         raise ValueError("q and/or k cannot be none")
@@ -52,51 +60,68 @@ def iterated_sumset(A, h):
 
 # Function to record subsets of subset(q, k) and their h-fold iterated sumset cardinality
 # deliberately uses dictionaries in case we want to look at what subsets A produce cardinality = |hA|
-def run(q, k, h):
-    Q = subset(q,k)
-    if card(Q) == 0:
-        raise ValueError('q cannot be less than k')
-    
-    size = {}
-    for A in Q:
-        new_A = iterated_sumset(A, h)
-        size[A] = card(new_A)
 
-    return size
+def run(q, k, h):
+    if q is None or k is None or h is None:
+        raise ValueError("q, k, and h cannot be None")
+
+    if q < k:
+        raise ValueError("q cannot be less than k")
+
+    if k < 1:
+        raise ValueError("k cannot be less than 1")
+
+    if h < 1:
+        raise ValueError("h cannot be less than 1")
+
+    frequency_by_size = Counter()
+
+    
+    for A in combinations(range(1, q + 1), k):
+        hA = iterated_sumset(A, h)
+        size = len(hA)
+
+        frequency_by_size[size] += 1
+
+    return frequency_by_size
 
 # Function to plot the sizes hA and their frequencies
 def histogram_plot(q, k, h, save_as=None):
-    size_by_set = run(q, k, h)
+    frequency_by_size = run(q, k, h)
 
-    if isinstance(size_by_set, Exception):
-        raise size_by_set
-
-    sizes = list(size_by_set.values())
-
-    if len(sizes) == 0:
+    if len(frequency_by_size) == 0:
         raise ValueError("There is no data to plot")
 
-    minimum_size = min(sizes)
-    maximum_size = max(sizes)
+    minimum_size = min(frequency_by_size)
+    maximum_observed = max(frequency_by_size)
 
-    # Center one bin at each integer.
-    bin_edges = [
-        n - 0.5
-        for n in range(minimum_size, maximum_size + 2)
+    #k-element subsets of [q]
+    bigQ = comb(q,k)
+
+    # Unrestricted theoretical maximum.
+    M_hk = comb(h + k - 1, k - 1)
+
+    # Include M_hk on the graph even if its frequency is zero.
+    maximum_plotted = max(maximum_observed, M_hk)
+
+    sizes = list(range(minimum_size, maximum_plotted + 1))
+
+    frequencies = [
+        frequency_by_size.get(size, 0)
+        for size in sizes
     ]
 
     fig, ax = plt.subplots(figsize=(10, 6))
 
-    frequencies, _, bars = ax.hist(
+    bars = ax.bar(
         sizes,
-        bins=bin_edges,
+        frequencies,
+        width=0.9,
         color="steelblue",
-        edgecolor="black",
-        rwidth=0.9
+        edgecolor="black"
     )
 
-    # Use only integers on both axes.
-    ax.set_xticks(range(minimum_size, maximum_size + 1))
+    ax.set_xticks(sizes)
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
     ax.set_xlabel(r"Size $|hA|$")
@@ -106,31 +131,29 @@ def histogram_plot(q, k, h, save_as=None):
         f"{k}-element subsets of [{q}]"
     )
 
-    # Write the frequency above each bar.
+    # Write each nonzero frequency above its bar.
     for frequency, bar in zip(frequencies, bars):
         if frequency > 0:
             ax.text(
                 bar.get_x() + bar.get_width() / 2,
                 frequency,
-                str(int(frequency)),
+                str(frequency),
                 ha="center",
                 va="bottom"
             )
-
-    # The theoretical maximum possible value of |hA|.
-    M_hk = comb(h + k - 1, k - 1)
 
     fig.text(
         0.5,
         0.02,
         rf"Unrestricted maximum: $M_{{{h},{k}}}={M_hk}$"
-        rf"   |   Maximum attained in $[{q}]$: ${maximum_size}$",
+        rf"   |   Maximum attained in $[{q}]$: "
+        rf"${maximum_observed}$"
+        rf" |   #${k}$-element subsets of $[{q}]$: ${bigQ}$",
         ha="center",
         va="bottom",
         fontsize=11
     )
 
-    # Reserve space for the text at the bottom.
     fig.tight_layout(rect=[0, 0.08, 1, 1])
 
     if save_as is not None:
@@ -140,6 +163,8 @@ def histogram_plot(q, k, h, save_as=None):
 
     return fig, ax
 
+
 # histogram_plot(q, k, h)
-histogram_plot(50, 5, 3)
+histogram_plot(90, 5, 3)
+
 
